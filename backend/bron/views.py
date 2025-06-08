@@ -1,13 +1,13 @@
 from urllib import request
 from django.shortcuts import get_object_or_404, render
 from rest_framework.views import APIView
-from rest_framework import status
+from rest_framework import status, permissions
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import SpacesReview, User, Event, Space, Booking, Organizer, Favourite
-from .serializers import SpacesReviewSerializer, UserSerializer, EventSerializer, SpaceSerializer, BookingSerializer, OrganizerSerializer, UserShortSerializer, SpaceShortSerializer, SpaceWidgetSerializer, EventWidgetSerializer, OrganizeWidgetSerializer
+from .models import SpacesReview, User, Event, Space, Booking, Organizer, Favourite, Building, ImageForSpaces, ItemInSpaces
+from .serializers import SpacesReviewSerializer, UserSerializer, EventSerializer, SpaceSerializer, BookingSerializer, OrganizerSerializer, UserShortSerializer, SpaceShortSerializer, SpaceWidgetSerializer, EventWidgetSerializer, OrganizeWidgetSerializer, SpaceEditSerializer, BuildingSerializer, ImageForSpacesSerializer, ItemInSpacesSerializer
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Count, Q, ExpressionWrapper, IntegerField, F
@@ -165,8 +165,12 @@ def eventPdfViewSet(request, pk):
 
     return response
 
+class IsAdminUserCustom(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and getattr(request.user, 'admin_status', False)
+
 class UserCurrentViewSet(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         serializer = UserSerializer(request.user, context={'request': request})
@@ -204,12 +208,6 @@ class EventViewSet(ModelViewSet):
                 'week_count': week_count
             }
         return Response(data)
-    
-# @api_view(['GET'])
-# def event_info(request, pk):
-#     post = get_object_or_404(Event, pk=pk)
-#     serializer = EventSerializer(post)
-#     return Response(serializer.data)
     
 class SpaceShortViewSet(ModelViewSet):
     queryset = Space.check_visiable.select_related()
@@ -326,7 +324,6 @@ class SpaceViewSet(ModelViewSet):
     @action(detail=True, methods=['put'], url_path='update_review/(?P<review_id>[^/.]+)', permission_classes=[IsAuthenticated])
     def update_review(self, request, pk=None, review_id=None):
         update_review = request.data.get('review')
-        # return Response(update_review)
         try:
             review = SpacesReview.objects.get(id=review_id, space_id=pk)
         except SpacesReview.DoesNotExist:
@@ -340,12 +337,67 @@ class SpaceViewSet(ModelViewSet):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['put'], url_path='edit', permission_classes=[IsAuthenticated])
+    def edit_space(self, request, pk=None):
+        update_space = request.data.get('space')
+        try:
+            space = Space.objects.get(id=pk)
+        except SpacesReview.DoesNotExist:
+            return Response({'detail': 'Помещение не найдено'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Нет прав на редактирование'}, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = SpaceEditSerializer(space, data=update_space, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'], url_path='images')
+    def upload_image(self, request, pk=None):
+        space = self.get_object()
+        if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Нет прав на редактирование'}, status=403)
 
-# @api_view(['GET'])
-# def space_info(request, pk):
-#     post = get_object_or_404(Space, pk=pk)
-#     serializer = SpaceSerializer(post)
-#     return Response(serializer.data)
+        image = request.FILES.get('image')
+        if not image:
+            return Response({'error': 'No image provided'}, status=400)
+
+        new_image = ImageForSpaces.objects.create(space_id=space, image=image)
+        return Response(ImageForSpacesSerializer(new_image).data)
+    
+    @action(detail=True, methods=['delete'], url_path='delete_image/(?P<image_id>[^/.]+)')
+    def delete_image(self, request, pk=None, image_id=None):
+        try:
+            image = ImageForSpaces.objects.get(id=image_id, space_id=pk)
+        except ImageForSpaces.DoesNotExist:
+            return Response({'detail': 'Изображение не найдено'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        image.delete()
+        return Response({'detail': 'Изображение удалено'}, status=status.HTTP_204_NO_CONTENT)
+    
+    @action(detail=True, methods=['patch'], url_path='set_cover/(?P<image_id>[^/.]+)')
+    def set_cover(self, request, pk=None, image_id=None):
+        try:
+            image = ImageForSpaces.objects.get(id=image_id, space_id=pk)
+        except ImageForSpaces.DoesNotExist:
+            return Response({'detail': 'Изображение не найдено'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        ImageForSpaces.objects.filter(space_id=pk, cover=True).update(cover=False)
+
+        image.cover = True
+        image.save()
+
+        return Response(ImageForSpacesSerializer(image).data, status=status.HTTP_200_OK)
+
 
 class BookingViewSet(ModelViewSet):
     queryset = Booking.objects.select_related(
@@ -379,10 +431,9 @@ class OrganizerViewSet(ModelViewSet):
         orgs = Organizer.objects.values('id', 'name')
         return Response(orgs)
      
-class SpacesReviewViewSet(MemoryError):
+class SpacesReviewViewSet(ModelViewSet):
     queryset = SpacesReview.objects.select_related()
     serializer_class = SpacesReviewSerializer
-    
     
 class WidgetViewSet(ViewSet):
     @action(detail=False, methods=["get"])
@@ -415,3 +466,12 @@ class WidgetViewSet(ViewSet):
             "upcoming_events": EventWidgetSerializer(upcoming_events, many=True).data,
             "top_organizers": OrganizeWidgetSerializer(organizers, many=True).data
         })
+        
+class BuildingViewSet(ModelViewSet):
+    queryset = Building.objects.all()
+    serializer_class = BuildingSerializer
+    
+class ItemsInSpacesViewSet(ModelViewSet):
+    queryset = ItemInSpaces.objects.all()
+    serializer_class = ItemInSpacesSerializer
+    

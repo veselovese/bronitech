@@ -14,6 +14,7 @@ class Profile(models.Model):
     image = models.ImageField(blank=True, default=None, upload_to='users/', verbose_name="Аватар")
     telegram_link = models.URLField("Профиль в Telegram", blank=True, null=True)
     org_status = models.BooleanField(default=False, verbose_name="Организатор")
+    admin_status = models.BooleanField(default=False, verbose_name="Администратор")
     
     class Meta:
         verbose_name = "Дополнительная информация о пользователях"

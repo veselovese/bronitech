@@ -15,7 +15,7 @@ class BookSerializer(ModelSerializer):
 class UserProfielSerializer(ModelSerializer):
     class Meta:
         model = Profile
-        fields = ["id", "patronymic", 'telephone', 'image', "org_status"]
+        fields = ["id", "patronymic", 'telephone', 'image', "org_status", "admin_status"]
         
 class UserShortSerializer(ModelSerializer):
     class Meta:
@@ -51,7 +51,7 @@ class BuildingSerializer(serializers.ModelSerializer):
 class ImageForSpacesSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImageForSpaces
-        fields = ['id', 'image', 'cover']
+        fields = ['id', 'image', 'cover', 'add_date']
 
 class SpacesReviewSerializer(serializers.ModelSerializer):
     user = UserShortSerializer(source='user_id', read_only=True)
@@ -66,6 +66,14 @@ class SpaceShortSerializer(ModelSerializer):
     class Meta:
         model = Space
         fields = ["id", "name", 'description', 'building', 'is_visiable']
+        
+class SpaceEditSerializer(serializers.ModelSerializer):
+    items_id = serializers.PrimaryKeyRelatedField(queryset=ItemInSpaces.objects.all(), many=True)
+    building_id = serializers.PrimaryKeyRelatedField(queryset=Building.objects.all())
+
+    class Meta:
+        model = Space
+        fields = ['name', 'description', 'capacity', 'is_visiable', 'building_id', 'items_id']
     
 class SpaceSerializer(ModelSerializer):
     bookings = BookSerializer(source='space_books', many=True, read_only=True)

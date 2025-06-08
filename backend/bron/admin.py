@@ -8,7 +8,7 @@ from datetime import timedelta
 from django.db.models import Q 
 
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ('profile_link', 'first_name', 'second_name', 'patronymic', 'email', 'telephone', 'link_tag', 'org_status')
+    list_display = ('profile_link', 'first_name', 'second_name', 'patronymic', 'email', 'telephone', 'link_tag', 'org_status', 'admin_status')
     list_display_links = None
     list_filter = ('org_status',)
     search_fields = ['user__username', 'user__first_name', 'user__last_name', 'patronymic']
@@ -41,7 +41,7 @@ class ProfileInline(admin.TabularInline):
     extra = 0     
 
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'first_name', 'last_name', 'patronymic', 'email', 'telephone', 'org_status')
+    list_display = ('username', 'first_name', 'last_name', 'patronymic', 'email', 'telephone', 'org_status', 'admin_status')
     inlines = [ProfileInline]
     
     @admin.display(description='Отчество')
@@ -55,6 +55,10 @@ class CustomUserAdmin(UserAdmin):
     @admin.display(boolean = True, description='Организатор')
     def org_status(self, obj):
         return obj.user_profile.org_status
+    
+    @admin.display(boolean = True, description='Администраторв')
+    def admin_status(self, obj):
+        return obj.user_profile.admin_status
     
 class ImageForSpacesAdmin(admin.ModelAdmin):
     list_display = ('space_id', 'image', 'image_tag', 'cover')
