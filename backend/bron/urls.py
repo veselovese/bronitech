@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .views import UserViewSet, EventViewSet, SpaceViewSet, BookingViewSet, UserCurrentViewSet, OrganizerViewSet, WidgetViewSet, BuildingViewSet, ItemsInSpacesViewSet
+from .views import UserViewSet, EventViewSet, SpaceViewSet, SpaceHiddenViewSet, BookingViewSet, UserCurrentViewSet, OrganizerViewSet, WidgetViewSet, BuildingViewSet, ItemsInSpacesViewSet
 
 app_name = "bron"
 
@@ -9,6 +9,7 @@ router = routers.DefaultRouter()
 router.register('users', UserViewSet)
 router.register('events', EventViewSet)
 router.register('spaces', SpaceViewSet, basename='space')
+router.register('spaceshidden', SpaceHiddenViewSet, basename='spacehidden')
 router.register('bookings', BookingViewSet)
 router.register('orgs', OrganizerViewSet)
 router.register('widgets', WidgetViewSet, basename='widgets')

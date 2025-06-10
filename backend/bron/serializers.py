@@ -87,7 +87,7 @@ class SpaceSerializer(ModelSerializer):
 
     class Meta:
         model = Space
-        fields = ["id", "name", 'description', 'capacity', 'building', 'items', 'images', 'bookings', 'url', 'reviews', 'fav_count', 'is_visiable', 'is_fav']
+        fields = ["id", "name", 'description', 'capacity', 'building', 'building_id', 'items', 'images', 'bookings', 'url', 'reviews', 'fav_count', 'is_visiable', 'is_fav']
     
     def get_url(self, obj):
         request = self.context.get('request')

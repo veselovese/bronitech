@@ -69,7 +69,7 @@ class Space(models.Model):
     building_id = models.ForeignKey(Building, on_delete=models.PROTECT, verbose_name="Здание")
     room_number = models.CharField(max_length=12, verbose_name="Номер помещения")
     add_date = models.DateTimeField(auto_now_add=True, verbose_name="Дата добавления")
-    is_visiable = models.BooleanField(default=True, verbose_name="Показывать")
+    is_visiable = models.BooleanField(default=False, verbose_name="Показывать")
     
     objects = models.Manager()
     check_visiable = VisiableManager() 

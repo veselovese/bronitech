@@ -167,8 +167,8 @@ def eventPdfViewSet(request, pk):
 
 class IsAdminUserCustom(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and getattr(request.user, 'admin_status', False)
-
+        return request.user.is_authenticated and hasattr(request.user, 'user_profile') and request.user.user_profile.admin_status
+    
 class UserCurrentViewSet(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -213,6 +213,22 @@ class SpaceShortViewSet(ModelViewSet):
     queryset = Space.check_visiable.select_related()
     serializer_class = SpaceShortSerializer
 
+class SpaceHiddenViewSet(ModelViewSet):
+    queryset = Space.objects.select_related(
+        ).prefetch_related(
+            'items_id', 
+            'space_images',
+            'space_reviews',
+            'favourite',
+            'space_reviews__user_id',
+            'space_books'
+        ).annotate(
+            fav_count=Count('favourite')
+        ).order_by('-fav_count').filter(is_visiable=False)
+        
+    serializer_class = SpaceSerializer
+    permission_classes = [IsAuthenticated, IsAdminUserCustom]
+
 class SpaceViewSet(ModelViewSet):
     queryset = Space.check_visiable.select_related(
         ).prefetch_related(
@@ -232,6 +248,12 @@ class SpaceViewSet(ModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+    
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        return super().create(request, *args, **kwargs)
     
     @action(detail=False, methods=['get'])
     def stats(self, request):
@@ -306,7 +328,6 @@ class SpaceViewSet(ModelViewSet):
         )
         return Response(SpacesReviewSerializer(review).data, status=status.HTTP_201_CREATED)
     
-    
     @action(detail=True, methods=['delete'], permission_classes=[IsAuthenticated], url_path='delete_review/(?P<review_id>[^/.]+)')
     def delete_review(self, request, pk=None, review_id=None):
         user = request.user
@@ -354,6 +375,22 @@ class SpaceViewSet(ModelViewSet):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    # @action(detail=True, methods=['post'], url_path='create', permission_classes=[IsAuthenticated])
+    # def create_space(self, request):
+    #     create_space = request.data.get('space')
+        
+    #     if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+    #         return Response({'detail': 'Нет прав на создание'}, status=status.HTTP_403_FORBIDDEN)
+        
+    #     if not create_space:
+    #         return Response({'error': 'Информация о помещении не может быть пустой'}, status=status.HTTP_400_BAD_REQUEST)
+
+    #     serializer = SpaceSerializer(create_space)
+    #     if serializer.is_valid():
+    #         space = serializer.save()
+    #         return Response(SpaceSerializer(space).data, status=status.HTTP_201_CREATED)
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'], url_path='images')
     def upload_image(self, request, pk=None):
