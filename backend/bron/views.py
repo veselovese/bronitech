@@ -9,7 +9,6 @@ from rest_framework.permissions import IsAuthenticated
 from .models import SpacesReview, User, Event, Space, Booking, Organizer, Favourite, Building, ImageForSpaces, ItemInSpaces
 from .serializers import SpacesReviewSerializer, UserSerializer, EventSerializer, SpaceSerializer, BookingSerializer, OrganizerSerializer, UserShortSerializer, SpaceShortSerializer, SpaceWidgetSerializer, EventWidgetSerializer, OrganizeWidgetSerializer, SpaceEditSerializer, BuildingSerializer, ImageForSpacesSerializer, ItemInSpacesSerializer
 from django.utils import timezone
-from datetime import timedelta
 from django.db.models import Count, Q, ExpressionWrapper, IntegerField, F
 from django.http import HttpResponse, Http404
 from reportlab.pdfgen import canvas
@@ -24,6 +23,10 @@ import qrcode
 import io
 from django.conf import settings
 from django.utils.timezone import localtime
+from django.utils.dateparse import parse_date
+from datetime import datetime, timedelta
+from django_filters.rest_framework import DjangoFilterBackend
+from .filters import SpaceFilter
 
 now = timezone.now()
 week_ago = now - timedelta(days=7)
@@ -244,10 +247,8 @@ class SpaceViewSet(ModelViewSet):
         
     serializer_class = SpaceSerializer
     
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context['request'] = self.request
-        return context
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = SpaceFilter
     
     def create(self, request, *args, **kwargs):
         if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
@@ -277,24 +278,15 @@ class SpaceViewSet(ModelViewSet):
         return Response(data)
     
     @action(detail=False, methods=['get'])
+    def items(self, request):
+        items = ItemInSpaces.objects.values('id', 'name')
+        return Response(items)
+    
+    @action(detail=False, methods=['get'])
     def search(self, request):
-        search = request.GET.get('q', '')
-        if search:
-            spaces = Space.check_visiable.select_related(
-        'building_id'
-    ).prefetch_related(
-        'items_id',
-        'space_images',
-        'space_reviews',
-        'space_reviews__user_id',
-        'space_books'
-    ).annotate(
-        fav_count=Count('favourite')
-    ).filter( Q(name__icontains=search) |
-                Q(description__icontains=search))
-        else:
-            spaces = Space.check_visiable.none()
-        return Response(SpaceSerializer(spaces, many=True, context={'request': request}).data)
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
       
     @action(detail=False, methods=['get'])
     def short(self, request):
@@ -376,22 +368,6 @@ class SpaceViewSet(ModelViewSet):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    # @action(detail=True, methods=['post'], url_path='create', permission_classes=[IsAuthenticated])
-    # def create_space(self, request):
-    #     create_space = request.data.get('space')
-        
-    #     if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
-    #         return Response({'detail': 'Нет прав на создание'}, status=status.HTTP_403_FORBIDDEN)
-        
-    #     if not create_space:
-    #         return Response({'error': 'Информация о помещении не может быть пустой'}, status=status.HTTP_400_BAD_REQUEST)
-
-    #     serializer = SpaceSerializer(create_space)
-    #     if serializer.is_valid():
-    #         space = serializer.save()
-    #         return Response(SpaceSerializer(space).data, status=status.HTTP_201_CREATED)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
     @action(detail=True, methods=['post'], url_path='images')
     def upload_image(self, request, pk=None):
         space = self.get_object()
@@ -434,13 +410,56 @@ class SpaceViewSet(ModelViewSet):
         image.save()
 
         return Response(ImageForSpacesSerializer(image).data, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def book(self, request, pk=None):
+        space = self.get_object()
+        user = request.user
 
+        try:
+            date_from = timezone.make_aware(datetime.strptime(request.data.get('date_from'), '%Y-%m-%d %H:%M'))
+            date_to = timezone.make_aware(datetime.strptime(request.data.get('date_to'), '%Y-%m-%d %H:%M'))
+        except Exception:
+            return Response({'error': 'Неверный формат даты'}, status=400)
+
+        if date_from >= date_to:
+            return Response({'error': 'Дата начала должна быть раньше даты окончания'}, status=400)
+
+        conflict_qs = Booking.objects.filter(
+            space_id=space,
+            status=Booking.Status.CONFIRMATION
+        )
+
+        if date_from and date_to:
+            conflict_qs = conflict_qs.exclude(
+                Q(date_to__lte=date_from) |
+                Q(date_from__gte=date_to)
+            )
+        elif date_from:
+            conflict_qs = conflict_qs.filter(
+                date_from__lte=date_from,
+                date_to__gt=date_from
+            )
+        elif date_to:
+            conflict_qs = conflict_qs.filter(
+                date_from__lt=date_to,
+                date_to__gte=date_to
+            )
+
+        if conflict_qs.exists():
+            return Response({'error': 'Помещение занято в выбранный период'}, status=400)
+
+        Booking.objects.create(
+            user_id=user,
+            space_id=space,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+        return Response({'success': True}, status=201)
 
 class BookingViewSet(ModelViewSet):
-    queryset = Booking.objects.select_related(
-        'user_id',
-        'space_id'
-    )
+    queryset = Booking.objects.select_related()
     serializer_class = BookingSerializer
     
     @action(detail=False, methods=['get'])
@@ -507,6 +526,11 @@ class WidgetViewSet(ViewSet):
 class BuildingViewSet(ModelViewSet):
     queryset = Building.objects.all()
     serializer_class = BuildingSerializer
+    
+    @action(detail=False, methods=['get'])
+    def cities(self, request):
+        cities = Building.objects.values_list('city').distinct()
+        return Response(cities)
     
 class ItemsInSpacesViewSet(ModelViewSet):
     queryset = ItemInSpaces.objects.all()

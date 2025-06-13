@@ -5,12 +5,7 @@ from .models import Building, ImageForEvents, ImageForSpaces, ItemInEvents, Item
 class RegSerializer(ModelSerializer):
     class Meta:
         model = Registration
-        fields = ['id', 'event_id', 'user_id', 'reg_date']
-        
-class BookSerializer(ModelSerializer):
-    class Meta:
-        model = Booking
-        fields = ['id', 'space_id', 'user_id', 'book_date']    
+        fields = ['id', 'event_id', 'user_id', 'reg_date']    
            
 class UserProfielSerializer(ModelSerializer):
     class Meta:
@@ -22,31 +17,41 @@ class UserShortSerializer(ModelSerializer):
         model = User
         fields = ["id", "first_name", "last_name"]
         
+class BuildingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Building
+        fields = ['id', 'city', 'street', 'house']
+        
+class SpaceShortSerializer(ModelSerializer):
+    building = BuildingSerializer(source='building_id', read_only=True)
+
+    class Meta:
+        model = Space
+        fields = ["id", "name", 'description', 'building', 'is_visiable']
+        
+class BookingSerializer(ModelSerializer):
+    user = UserShortSerializer(source='user_id', read_only=True)
+    space = SpaceShortSerializer(source='space_id', read_only=True)
+
+    class Meta:
+        model = Booking
+        fields = ['id', 'space_id', 'space', 'user_id', 'user', 'date_from', 'date_to', 'book_date']
+        
 class UserSerializer(ModelSerializer):
     profile = UserProfielSerializer(source='user_profile')
     user_regs = RegSerializer(many=True, read_only=True)
-    user_books = BookSerializer(many=True, read_only=True)
+    user_books = BookingSerializer(many=True, read_only=True)
     total_events = serializers.IntegerField(read_only=True)
     total_bookings = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = User
         fields = ["id", "first_name", "last_name", 'profile', 'user_regs', 'user_books', 'total_events', 'total_bookings']
-
-class BookingSerializer(ModelSerializer):
-    class Meta:
-        model = Booking
-        fields = ["id", "user_id", "space_id", 'book_date']
         
 class ItemInSpacesSerializer(serializers.ModelSerializer):
     class Meta:
         model = ItemInSpaces
         fields = ['id', 'name']
-
-class BuildingSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Building
-        fields = ['id', 'city', 'street', 'house']
 
 class ImageForSpacesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -60,13 +65,6 @@ class SpacesReviewSerializer(serializers.ModelSerializer):
         model = SpacesReview
         fields = ['id', 'review', 'add_date', 'user']
         
-class SpaceShortSerializer(ModelSerializer):
-    building = BuildingSerializer(source='building_id', read_only=True)
-
-    class Meta:
-        model = Space
-        fields = ["id", "name", 'description', 'building', 'is_visiable']
-        
 class SpaceEditSerializer(serializers.ModelSerializer):
     items_id = serializers.PrimaryKeyRelatedField(queryset=ItemInSpaces.objects.all(), many=True)
     building_id = serializers.PrimaryKeyRelatedField(queryset=Building.objects.all())
@@ -76,7 +74,7 @@ class SpaceEditSerializer(serializers.ModelSerializer):
         fields = ['name', 'description', 'capacity', 'is_visiable', 'building_id', 'items_id']
     
 class SpaceSerializer(ModelSerializer):
-    bookings = BookSerializer(source='space_books', many=True, read_only=True)
+    bookings = BookingSerializer(source='space_books', many=True, read_only=True)
     url = serializers.SerializerMethodField()
     fav_count = serializers.IntegerField(read_only=True)
     building = BuildingSerializer(source='building_id', read_only=True)
@@ -87,7 +85,7 @@ class SpaceSerializer(ModelSerializer):
 
     class Meta:
         model = Space
-        fields = ["id", "name", 'description', 'capacity', 'building', 'building_id', 'items', 'images', 'bookings', 'url', 'reviews', 'fav_count', 'is_visiable', 'is_fav']
+        fields = ["id", "name", 'description', 'capacity', 'building', 'building_id', 'items', 'items_id', 'images', 'bookings', 'url', 'reviews', 'fav_count', 'is_visiable', 'is_fav']
     
     def get_url(self, obj):
         request = self.context.get('request')
@@ -138,7 +136,6 @@ class EventSerializer(ModelSerializer):
         request = self.context.get('request')
         return request.build_absolute_uri(obj.get_absolute_url()) if request else obj.get_absolute_url()
     
-
 class SpaceWidgetSerializer(serializers.ModelSerializer):
     images = ImageForSpacesSerializer(source='space_images', many=True, read_only=True)
     review_count = serializers.IntegerField(read_only=True)
