@@ -22,12 +22,18 @@ class BuildingSerializer(serializers.ModelSerializer):
         model = Building
         fields = ['id', 'city', 'street', 'house']
         
+class ImageForSpacesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ImageForSpaces
+        fields = ['id', 'image', 'cover', 'add_date']        
+        
 class SpaceShortSerializer(ModelSerializer):
     building = BuildingSerializer(source='building_id', read_only=True)
+    images = ImageForSpacesSerializer(source='space_images', many=True, read_only=True)
 
     class Meta:
         model = Space
-        fields = ["id", "name", 'description', 'building', 'is_visiable']
+        fields = ["id", "name", 'description', 'building', 'is_visiable', 'images']
         
 class BookingSerializer(ModelSerializer):
     user = UserShortSerializer(source='user_id', read_only=True)
@@ -35,7 +41,7 @@ class BookingSerializer(ModelSerializer):
 
     class Meta:
         model = Booking
-        fields = ['id', 'space_id', 'space', 'user_id', 'user', 'date_from', 'date_to', 'book_date']
+        fields = ['id', 'space_id', 'space', 'user_id', 'user', 'date_from', 'date_to', 'book_date', 'status']
         
 class UserSerializer(ModelSerializer):
     profile = UserProfielSerializer(source='user_profile')
@@ -46,17 +52,12 @@ class UserSerializer(ModelSerializer):
     
     class Meta:
         model = User
-        fields = ["id", "first_name", "last_name", 'profile', 'user_regs', 'user_books', 'total_events', 'total_bookings']
+        fields = ["id", "first_name", "last_name", 'username', 'email', 'profile', 'user_regs', 'user_books', 'total_events', 'total_bookings']
         
 class ItemInSpacesSerializer(serializers.ModelSerializer):
     class Meta:
         model = ItemInSpaces
         fields = ['id', 'name']
-
-class ImageForSpacesSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ImageForSpaces
-        fields = ['id', 'image', 'cover', 'add_date']
 
 class SpacesReviewSerializer(serializers.ModelSerializer):
     user = UserShortSerializer(source='user_id', read_only=True)

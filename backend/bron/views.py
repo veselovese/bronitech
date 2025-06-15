@@ -179,7 +179,90 @@ class UserCurrentViewSet(APIView):
         serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
 
+class UserAdminViewSet(APIView):
+    permission_classes = [IsAdminUserCustom]
+    def get(self, request):
+        user = request.user
+        users = User.objects.select_related('user_profile').prefetch_related(
+            'user_regs',
+            'user_books',
+        ).annotate(
+            total_events=Count('user_regs', distinct=True),
+            total_bookings=Count('user_books', distinct=True)
+        ).exclude(
+            id=user.id,
+        ).order_by(
+            'first_name'
+        )
+        return Response(UserSerializer(users, many=True).data)
+    
+class UserMakeAdminViewSet(ModelViewSet):
+    permission_classes = [IsAuthenticated, IsAdminUserCustom]
+    queryset = User.objects.select_related('user_profile').prefetch_related(
+        'user_regs',
+        'user_books',
+    ).annotate(
+        total_events=Count('user_regs', distinct=True),
+        total_bookings=Count('user_books', distinct=True)
+    ).order_by('-first_name')
+    serializer_class = UserSerializer 
+    
+    @action(detail=True, methods=['patch', 'get'], permission_classes=[IsAdminUserCustom])
+    def makeadmin(self, request, pk=None):
+        try:
+            user = User.objects.get(id=pk)
+        except User.DoesNotExist:
+            return Response({'detail': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        user.user_profile.admin_status = True
+        user.save()
+        
+        users = User.objects.select_related('user_profile').prefetch_related(
+            'user_regs',
+            'user_books',
+        ).annotate(
+            total_events=Count('user_regs', distinct=True),
+            total_bookings=Count('user_books', distinct=True)
+        ).exclude(
+            id=user.id,
+        ).order_by(
+            'first_name'
+        )
+
+        return Response(UserSerializer(user).data, status=status.HTTP_200_OK)  
+    
+    @action(detail=True, methods=['patch', 'get'], permission_classes=[IsAdminUserCustom])
+    def unmakeadmin(self, request, pk=None):
+        try:
+            user = User.objects.get(id=pk)
+        except User.DoesNotExist:
+            return Response({'detail': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        user.user_profile.admin_status = False
+        user.save()
+        
+        users = User.objects.select_related('user_profile').prefetch_related(
+            'user_regs',
+            'user_books',
+        ).annotate(
+            total_events=Count('user_regs', distinct=True),
+            total_bookings=Count('user_books', distinct=True)
+        ).exclude(
+            id=user.id,
+        ).order_by(
+            'first_name'
+        )
+
+        return Response(UserSerializer(user).data, status=status.HTTP_200_OK)  
+    
 class UserViewSet(ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset = User.objects.select_related('user_profile').prefetch_related(
         'user_regs',
         'user_books',
@@ -312,6 +395,16 @@ class SpaceViewSet(ModelViewSet):
 
         if not review_text:
             return Response({'error': 'Комментарий не может быть пустым'}, status=status.HTTP_400_BAD_REQUEST)
+
+        has_booking = Booking.objects.filter(
+                user_id=user,
+                space_id=space,
+                status=Booking.Status.CONFIRMATION
+            ).exists()
+        
+        if not has_booking:
+            return Response({'error': 'Вы не можете оставить отзыв, так как не бронировали это помещение'},
+                        status=status.HTTP_403_FORBIDDEN)
 
         review = SpacesReview.objects.create(
             user_id=user,
@@ -449,14 +542,14 @@ class SpaceViewSet(ModelViewSet):
         if conflict_qs.exists():
             return Response({'error': 'Помещение занято в выбранный период'}, status=400)
 
-        Booking.objects.create(
+        new_book = Booking.objects.create(
             user_id=user,
             space_id=space,
             date_from=date_from,
             date_to=date_to,
         )
 
-        return Response({'success': True}, status=201)
+        return Response(BookingSerializer(new_book).data, status=201)
 
 class BookingViewSet(ModelViewSet):
     queryset = Booking.objects.select_related()
@@ -469,6 +562,54 @@ class BookingViewSet(ModelViewSet):
         ).aggregate(last_week_bookings=Count('id'))
         return Response(book_stats)
     
+class NewBookingViewSet(ModelViewSet):
+    permission_classes = [IsAdminUserCustom]
+    queryset = Booking.objects.select_related().filter(
+                status="NB",
+                date_from__gte=timezone.now()
+            ).order_by('book_date')
+    serializer_class = BookingSerializer
+    
+    @action(detail=True, methods=['patch', 'get'], permission_classes=[IsAdminUserCustom])
+    def conf(self, request, pk=None):
+        try:
+            book = Booking.objects.get(id=pk)
+        except Booking.DoesNotExist:
+            return Response({'detail': 'Бронирование не найдено'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        book.status = "C"
+        book.save()
+        
+        books = Booking.objects.select_related().filter(
+                status="NB",
+                date_from__gte=timezone.now()
+            )
+
+        return Response(BookingSerializer(books, many=True).data, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['patch', 'get'], permission_classes=[IsAdminUserCustom])
+    def canc(self, request, pk=None):
+        try:
+            book = Booking.objects.get(id=pk)
+        except Booking.DoesNotExist:
+            return Response({'detail': 'Бронирование не найдено'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        book.status = "CBC"
+        book.save()
+        
+        books = Booking.objects.select_related().filter(
+                status="NB",
+                date_from__gte=timezone.now()
+            )
+
+        return Response(BookingSerializer(books, many=True).data, status=status.HTTP_200_OK)
+          
 class OrganizerViewSet(ModelViewSet):
     queryset = Organizer.objects.select_related()
     serializer_class = OrganizerSerializer
