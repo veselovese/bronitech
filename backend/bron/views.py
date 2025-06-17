@@ -314,6 +314,49 @@ class SpaceHiddenViewSet(ModelViewSet):
         
     serializer_class = SpaceSerializer
     permission_classes = [IsAuthenticated, IsAdminUserCustom]
+    
+    @action(detail=True, methods=['post'], url_path='images')
+    def upload_image(self, request, pk=None):
+        space = self.get_object()
+        if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Нет прав на редактирование'}, status=403)
+
+        image = request.FILES.get('image')
+        if not image:
+            return Response({'error': 'No image provided'}, status=400)
+
+        new_image = ImageForSpaces.objects.create(space_id=space, image=image)
+        return Response(ImageForSpacesSerializer(new_image).data)
+    
+    @action(detail=True, methods=['delete'], url_path='delete_image/(?P<image_id>[^/.]+)')
+    def delete_image(self, request, pk=None, image_id=None):
+        try:
+            image = ImageForSpaces.objects.get(id=image_id, space_id=pk)
+        except ImageForSpaces.DoesNotExist:
+            return Response({'detail': 'Изображение не найдено'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        image.delete()
+        return Response({'detail': 'Изображение удалено'}, status=status.HTTP_204_NO_CONTENT)
+    
+    @action(detail=True, methods=['patch'], url_path='set_cover/(?P<image_id>[^/.]+)')
+    def set_cover(self, request, pk=None, image_id=None):
+        try:
+            image = ImageForSpaces.objects.get(id=image_id, space_id=pk)
+        except ImageForSpaces.DoesNotExist:
+            return Response({'detail': 'Изображение не найдено'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
+            return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        ImageForSpaces.objects.filter(space_id=pk, cover=True).update(cover=False)
+
+        image.cover = True
+        image.save()
+
+        return Response(ImageForSpacesSerializer(image).data, status=status.HTTP_200_OK)
 
 class SpaceViewSet(ModelViewSet):
     queryset = Space.check_visiable.select_related(
@@ -504,7 +547,7 @@ class SpaceViewSet(ModelViewSet):
 
         return Response(ImageForSpacesSerializer(image).data, status=status.HTTP_200_OK)
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='book')
     def book(self, request, pk=None):
         space = self.get_object()
         user = request.user

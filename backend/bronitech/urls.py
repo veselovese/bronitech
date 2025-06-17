@@ -25,6 +25,6 @@ from bron.views import eventPdfViewSet
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('bron.urls')),
-    path('events/<int:pk>/pdf/', eventPdfViewSet, name='event-pdf')    
-
+    path('events/<int:pk>/pdf/', eventPdfViewSet, name='event-pdf'),   
+    path('silk/', include('silk.urls', namespace='silk')),
 ] + static(settings.MEDIA_URL, document_root = settings.MEDIA_ROOT) + debug_toolbar_urls()

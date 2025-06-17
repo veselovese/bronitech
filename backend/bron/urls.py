@@ -8,7 +8,7 @@ app_name = "bron"
 router = routers.DefaultRouter()
 router.register('adminusers', UserMakeAdminViewSet, basename='users-makeadmin')
 router.register('events', EventViewSet)
-router.register('spaces', SpaceViewSet, basename='space')
+router.register(r'spaces', SpaceViewSet, basename='space')
 router.register('spaceshidden', SpaceHiddenViewSet, basename='spacehidden')
 router.register('bookings', BookingViewSet)
 router.register('newbookings', NewBookingViewSet, basename='newbookings')

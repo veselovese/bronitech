@@ -4,6 +4,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
 from django.urls import reverse
+from django.core.exceptions import ValidationError
 
 
 # Пользовательская информация  
@@ -132,7 +133,11 @@ class Booking(models.Model):
         ordering = ['-book_date']
     
     def __str__(self):
-        return self.space_id.name + ' на ' + self.date_from.strftime("%d.%m.%Y") + '-' + self.date_to.strftime("%d.%m.%Y") + ' для ' + self.user_id.first_name + ' ' + self.user_id.last_name 
+        return self.space_id.name + ' на ' + self.date_from.strftime("%d.%m.%Y") + '-' + self.date_to.strftime("%d.%m.%Y") + ' для ' + self.user_id.first_name + ' ' + self.user_id.last_name
+    
+    def clean(self):
+        if self.date_from >= self.date_to:
+            raise ValidationError("Дата начала должна быть раньше даты окончания") 
 
 # Информация о мероприятиях   
 class Organizer(models.Model):

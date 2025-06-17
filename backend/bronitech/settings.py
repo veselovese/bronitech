@@ -12,6 +12,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -46,11 +49,13 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'djoser',
     'debug_toolbar',
-    'django_filters'
+    'django_filters',
+    'silk'
 ]
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'silk.middleware.SilkyMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -177,3 +182,10 @@ DJOSER = {
         'current_user': 'bron.serializers.UserSerializer',
     },
 }
+
+sentry_sdk.init(
+    dsn="https://1801cda5e8e20e2e59011da9c6d9516a@o4509512993800192.ingest.de.sentry.io/4509512997208144",
+    integrations=[DjangoIntegration()],
+    traces_sample_rate=1.0,
+    send_default_pii=True,
+)
