@@ -1,3 +1,4 @@
+from typing import Optional
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 from .models import Building, ImageForEvents, ImageForSpaces, ItemInEvents, ItemInSpaces, Organizer, SpacesReview, User, Registration, Event, Booking, Space, Profile
@@ -88,11 +89,29 @@ class SpaceSerializer(ModelSerializer):
         model = Space
         fields = ["id", "name", 'description', 'capacity', 'building', 'building_id', 'items', 'items_id', 'images', 'bookings', 'url', 'reviews', 'fav_count', 'is_visiable', 'is_fav']
     
-    def get_url(self, obj):
+    def get_url(self, obj: Space) -> str:
+        """
+        Получение полного URL объекта Space
+
+        Args:
+            obj: Объект Space
+
+        Returns:
+            Абсолютный URL объекта
+        """
         request = self.context.get('request')
         return request.build_absolute_uri(obj.get_absolute_url()) if request else obj.get_absolute_url()
     
-    def get_is_fav(self, obj):
+    def get_is_fav(self, obj: Space) -> bool:
+        """
+        Проверяет, является ли пространство любимым для текущего пользователя
+
+        Args:
+            obj: Объект Space
+
+        Returns:
+            True, если пространство добавлено в избранное текущим пользователем, иначе False
+        """
         user = self.context['request'].user
         if user.is_authenticated:
             return obj.favourite.filter(user_id=user).exists()
@@ -106,7 +125,16 @@ class OrganizerSerializer(serializers.ModelSerializer):
         model = Organizer
         fields = ['id', 'name', 'description', 'user', 'url']
         
-    def get_url(self, obj):
+    def get_url(self, obj: Organizer) -> str:
+        """
+        Получение полного URL объекта Organizer
+
+        Args:
+            obj: Объект Organizer
+
+        Returns:
+            Абсолютный URL объекта
+        """
         request = self.context.get('request')
         return request.build_absolute_uri(obj.get_absolute_url()) if request else obj.get_absolute_url()
 
@@ -133,7 +161,16 @@ class EventSerializer(ModelSerializer):
         model = Event
         fields = ["id", "name", 'description', 'date', 'org_id', 'organizer', 'space_id', 'space', 'images', 'items', 'regs', 'url', 'reg_count', 'is_visiable']
         
-    def get_url(self, obj):
+    def get_url(self, obj: Event) -> str:
+        """
+        Получение полного URL объекта Event
+
+        Args:
+            obj: Объект Event
+
+        Returns:
+            Абсолютный URL объекта
+        """
         request = self.context.get('request')
         return request.build_absolute_uri(obj.get_absolute_url()) if request else obj.get_absolute_url()
     
@@ -147,7 +184,16 @@ class SpaceWidgetSerializer(serializers.ModelSerializer):
         model = Space
         fields = ['id', 'name', 'add_date', 'images', 'get_absolute_url', 'review_count', 'fav_count', 'booking_count']
 
-    def get_building(self, obj):
+    def get_building(self, obj: Space) -> str:
+        """
+        Возвращает строковое представление здания, связанного с пространством
+
+        Args:
+            obj: Объект Space
+
+        Returns:
+            Строковое представление здания
+        """
         return str(obj.building_id)
 
 
@@ -159,7 +205,16 @@ class EventWidgetSerializer(serializers.ModelSerializer):
         model = Event
         fields = ['id', 'name', 'description', 'date', 'image', 'get_absolute_url', 'organizer']
 
-    def get_image(self, obj):
+    def get_image(self, obj: Event) -> Optional[str]:
+        """
+        Получает URL изображения с пометкой cover, либо первое изображение, либо None
+
+        Args:
+            obj: Объект Event
+
+        Returns:
+            URL изображения или None
+        """
         cover = obj.event_images.filter(cover=True).first()
         if cover:
             return cover.image.url
@@ -174,5 +229,14 @@ class OrganizeWidgetSerializer(serializers.ModelSerializer):
         model = Organizer
         fields = ['id', 'name', 'description', 'event_count', 'url']
 
-    def get_url(self, obj):
+    def get_url(self, obj: Organizer) -> str:
+        """
+        Получение абсолютного URL объекта Organizer
+
+        Args:
+            obj: Объект Organizer
+
+        Returns:
+            Абсолютный URL объекта
+        """
         return obj.get_absolute_url()

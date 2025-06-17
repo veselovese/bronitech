@@ -1,5 +1,7 @@
+from typing import Any, Optional
 from urllib import request
 from django.shortcuts import get_object_or_404, render
+from requests import Request
 from rest_framework.views import APIView
 from rest_framework import status, permissions
 from rest_framework.viewsets import ModelViewSet, ViewSet
@@ -31,7 +33,17 @@ from .filters import SpaceFilter
 now = timezone.now()
 week_ago = now - timedelta(days=7)
 
-def eventPdfViewSet(request, pk):
+def eventPdfViewSet(request: HttpResponse, pk: int) -> HttpResponse:
+    """
+    Генерация PDF-документа с информацией о мероприятии
+
+    Args:
+        request: Объект запроса
+        pk: ID мероприятия
+
+    Returns:
+        PDF-файл в HTTP-ответе
+    """
     try:
         event = Event.objects.get(pk=pk)
     except Event.DoesNotExist:
@@ -169,19 +181,57 @@ def eventPdfViewSet(request, pk):
     return response
 
 class IsAdminUserCustom(permissions.BasePermission):
-    def has_permission(self, request, view):
+    """
+    Проверка, является ли пользователь админом
+    """
+    def has_permission(self, request, view) -> bool:
+        """
+        Проверка прав доступа
+
+        Args:
+            request: Объект запроса
+            view: Представление
+
+        Returns:
+            True, если пользователь аутентифицирован и является админом
+        """
         return request.user.is_authenticated and hasattr(request.user, 'user_profile') and request.user.user_profile.admin_status
     
 class UserCurrentViewSet(APIView):
+    """
+    Возвращает текущего авторизованного пользователя
+    """
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+    def get(self, request: HttpResponse) -> Response:
+        """
+        Получить данные текущего пользователя
+
+        Args:
+            request: Объект запроса
+
+        Returns:
+            Сериализованные данные пользователя
+        """
         serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
 
 class UserAdminViewSet(APIView):
+    """
+    Представление для получения списка пользователей, кроме текущего админа
+    """
     permission_classes = [IsAdminUserCustom]
-    def get(self, request):
+
+    def get(self, request: HttpResponse) -> Response:
+        """
+        Получить список пользователей с подсчетом мероприятий и бронирований
+
+        Args:
+            request: Объект запроса
+
+        Returns:
+            Список сериализованных пользователей
+        """
         user = request.user
         users = User.objects.select_related('user_profile').prefetch_related(
             'user_regs',
@@ -197,6 +247,9 @@ class UserAdminViewSet(APIView):
         return Response(UserSerializer(users, many=True).data)
     
 class UserMakeAdminViewSet(ModelViewSet):
+    """
+    Представление для управления правами администратора пользователей
+    """
     permission_classes = [IsAuthenticated, IsAdminUserCustom]
     queryset = User.objects.select_related('user_profile').prefetch_related(
         'user_regs',
@@ -208,7 +261,17 @@ class UserMakeAdminViewSet(ModelViewSet):
     serializer_class = UserSerializer 
     
     @action(detail=True, methods=['patch', 'get'], permission_classes=[IsAdminUserCustom])
-    def makeadmin(self, request, pk=None):
+    def makeadmin(self, request: HttpResponse, pk: int = None) -> Response:
+        """
+        Назначить пользователя админом
+
+        Args:
+            request: Объект запроса
+            pk: ID пользователя
+
+        Returns:
+            Сериализованные данные пользователя
+        """
         try:
             user = User.objects.get(id=pk)
         except User.DoesNotExist:
@@ -235,7 +298,17 @@ class UserMakeAdminViewSet(ModelViewSet):
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)  
     
     @action(detail=True, methods=['patch', 'get'], permission_classes=[IsAdminUserCustom])
-    def unmakeadmin(self, request, pk=None):
+    def unmakeadmin(self, request: HttpResponse, pk: int = None) -> Response:
+        """
+        Убрать у пользователя права админа
+
+        Args:
+            request: Объект запроса
+            pk: ID пользователя
+
+        Returns:
+            Сериализованные данные пользователя
+        """
         try:
             user = User.objects.get(id=pk)
         except User.DoesNotExist:
@@ -262,6 +335,9 @@ class UserMakeAdminViewSet(ModelViewSet):
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)  
     
 class UserViewSet(ModelViewSet):
+    """
+    Представление для пользователей с полной информацией
+    """
     permission_classes = [IsAuthenticated]
     queryset = User.objects.select_related('user_profile').prefetch_related(
         'user_regs',
@@ -273,10 +349,16 @@ class UserViewSet(ModelViewSet):
     serializer_class = UserSerializer   
     
 class UserShortViewSet(ModelViewSet):
+    """
+    Представление для краткого списка пользователей
+    """
     queryset = User.objects.order_by('-first_name')
     serializer_class = UserShortSerializer   
     
 class EventViewSet(ModelViewSet):
+    """
+    Представление для управления мероприятиями
+    """
     queryset = Event.objects.select_related(
     ).prefetch_related(
         'items_id',
@@ -288,7 +370,16 @@ class EventViewSet(ModelViewSet):
     serializer_class = EventSerializer   
     
     @action(detail=False, methods=['get'])
-    def week(self, request):
+    def week(self, request: HttpResponse) -> Response:
+        """
+        Получить количество мероприятий за текущую неделю
+
+        Args:
+            request: Объект запроса
+
+        Returns:
+            Словарь с количеством мероприятий
+        """
         week_count = Event.objects.filter(date__lte=timezone.now()+timedelta(days=7)).exclude(date__lt=timezone.now()).count()
         data = {
                 'week_count': week_count
@@ -296,10 +387,16 @@ class EventViewSet(ModelViewSet):
         return Response(data)
     
 class SpaceShortViewSet(ModelViewSet):
+    """
+    Представление для краткого списка пространств
+    """
     queryset = Space.check_visiable.select_related()
     serializer_class = SpaceShortSerializer
 
 class SpaceHiddenViewSet(ModelViewSet):
+    """
+    Представление для скрытых пространств
+    """
     queryset = Space.objects.select_related(
         ).prefetch_related(
             'items_id', 
@@ -316,7 +413,17 @@ class SpaceHiddenViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminUserCustom]
     
     @action(detail=True, methods=['post'], url_path='images')
-    def upload_image(self, request, pk=None):
+    def upload_image(self, request: HttpResponse, pk: int = None) -> Response:
+        """
+        Загрузить изображение к пространству
+
+        Args:
+            request: Объект запроса
+            pk: ID пространства
+
+        Returns:
+            Сериализованное изображение или сообщение об ошибке
+        """
         space = self.get_object()
         if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
             return Response({'detail': 'Нет прав на редактирование'}, status=403)
@@ -329,7 +436,18 @@ class SpaceHiddenViewSet(ModelViewSet):
         return Response(ImageForSpacesSerializer(new_image).data)
     
     @action(detail=True, methods=['delete'], url_path='delete_image/(?P<image_id>[^/.]+)')
-    def delete_image(self, request, pk=None, image_id=None):
+    def delete_image(self, request: HttpResponse, pk: int = None, image_id: int = None) -> Response:
+        """
+        Удалить изображение у пространства
+
+        Args:
+            request: Объект запроса
+            pk: ID пространства
+            image_id: ID изображения
+
+        Returns:
+            Подтверждение удаления или сообщение об ошибке
+        """
         try:
             image = ImageForSpaces.objects.get(id=image_id, space_id=pk)
         except ImageForSpaces.DoesNotExist:
@@ -342,7 +460,18 @@ class SpaceHiddenViewSet(ModelViewSet):
         return Response({'detail': 'Изображение удалено'}, status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=True, methods=['patch'], url_path='set_cover/(?P<image_id>[^/.]+)')
-    def set_cover(self, request, pk=None, image_id=None):
+    def set_cover(self, request: HttpResponse, pk: int = None, image_id: int = None) -> Response:
+        """
+        Установить обложку для изображения пространства
+
+        Args:
+            request: Объект запроса
+            pk: ID пространства
+            image_id: ID изображения
+
+        Returns:
+            Сериализованные данные изображения
+        """
         try:
             image = ImageForSpaces.objects.get(id=image_id, space_id=pk)
         except ImageForSpaces.DoesNotExist:
@@ -359,6 +488,9 @@ class SpaceHiddenViewSet(ModelViewSet):
         return Response(ImageForSpacesSerializer(image).data, status=status.HTTP_200_OK)
 
 class SpaceViewSet(ModelViewSet):
+    """
+    ViewSet для управления пространствами
+    """
     queryset = Space.check_visiable.select_related(
         ).prefetch_related(
             'items_id', 
@@ -376,14 +508,32 @@ class SpaceViewSet(ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = SpaceFilter
     
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """
+        Создание нового пространства
+
+        Args:
+            request: Объект запроса
+
+        Returns:
+            Response: Ответ API
+        """
         if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
             return Response({'detail': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
 
         return super().create(request, *args, **kwargs)
     
     @action(detail=False, methods=['get'])
-    def stats(self, request):
+    def stats(self, request: Request) -> Response:
+        """
+        Получение статистики: наиболее бронируемое пространство за последнюю неделю
+
+        Args:
+            request: Объект запроса
+
+        Returns:
+            Response: Ответ API со статистикой
+        """
         most_booked_space = Space.check_visiable.annotate(
             book_count=Count('space_books',
             filter=Q(space_books__book_date__range=(week_ago, now)))
@@ -404,23 +554,50 @@ class SpaceViewSet(ModelViewSet):
         return Response(data)
     
     @action(detail=False, methods=['get'])
-    def items(self, request):
+    def items(self, request: Request) -> Response:
+        """
+        Список всех предметов в пространствах
+
+        Returns:
+            Response: Список предметов
+        """
         items = ItemInSpaces.objects.values('id', 'name')
         return Response(items)
     
     @action(detail=False, methods=['get'])
-    def search(self, request):
+    def search(self, request: Request) -> Response:
+        """
+        Поиск по фильтру
+
+        Returns:
+            Response: Отфильтрованные пространства
+        """
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
       
     @action(detail=False, methods=['get'])
-    def short(self, request):
+    def short(self, request: Request) -> Response:
+        """
+        Краткая информация: id и name всех пространств
+
+        Returns:
+            Response: Краткий список пространств
+        """
         spaces = Space.check_visiable.values_list('id', 'name')
         return Response(spaces)
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def toggle_favourite(self, request, pk=None):
+    def toggle_favourite(self, request: Request, pk: Optional[str] = None) -> Response:
+        """
+        Добавление или удаление пространства из избранного
+
+        Args:
+            pk: ID пространства
+
+        Returns:
+            Response: Статус действия
+        """
         user = request.user
         space = self.get_object()
 
@@ -431,7 +608,16 @@ class SpaceViewSet(ModelViewSet):
         return Response({'status': 'added'})
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def add_comment(self, request, pk=None):
+    def add_comment(self, request: Request, pk: Optional[str] = None) -> Response:
+        """
+        Добавить комментарий к пространству (если было бронирование)
+
+        Args:
+            pk: ID пространства
+
+        Returns:
+            Response: Новый отзыв или ошибка
+        """
         space = self.get_object()
         user = request.user
         review_text = request.data.get('review')
@@ -457,7 +643,17 @@ class SpaceViewSet(ModelViewSet):
         return Response(SpacesReviewSerializer(review).data, status=status.HTTP_201_CREATED)
     
     @action(detail=True, methods=['delete'], permission_classes=[IsAuthenticated], url_path='delete_review/(?P<review_id>[^/.]+)')
-    def delete_review(self, request, pk=None, review_id=None):
+    def delete_review(self, request: Request, pk: Optional[str] = None, review_id: Optional[str] = None) -> Response:
+        """
+        Удалить отзыв пользователя
+
+        Args:
+            pk: ID пространства
+            review_id: ID отзыва
+
+        Returns:
+            Response: Статус удаления
+        """
         user = request.user
         try:
             review = SpacesReview.objects.get(id=review_id, space_id=pk)
@@ -471,7 +667,18 @@ class SpaceViewSet(ModelViewSet):
         return Response({'status': 'deleted'}, status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=True, methods=['put'], url_path='update_review/(?P<review_id>[^/.]+)', permission_classes=[IsAuthenticated])
-    def update_review(self, request, pk=None, review_id=None):
+    def update_review(self, request: Request, pk: Optional[str] = None, review_id: Optional[str] = None) -> Response:
+        """
+        Обновить отзыв пользователя
+
+        Args:
+            pk: ID пространства
+            review_id: ID отзыва
+            request: Объект запроса
+
+        Returns:
+            Response: Отредактированный отзыв или ошибка
+        """
         update_review = request.data.get('review')
         try:
             review = SpacesReview.objects.get(id=review_id, space_id=pk)
@@ -488,7 +695,17 @@ class SpaceViewSet(ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['put'], url_path='edit', permission_classes=[IsAuthenticated])
-    def edit_space(self, request, pk=None):
+    def edit_space(self, request: Request, pk: Optional[str] = None) -> Response:
+        """
+        Редактирование информации о пространстве
+
+        Args:
+            pk: ID пространства
+            request: Объект запроса
+
+        Returns:
+            Response: Отредактированное пространство или ошибка
+        """
         update_space = request.data.get('space')
         try:
             space = Space.objects.get(id=pk)
@@ -505,7 +722,17 @@ class SpaceViewSet(ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'], url_path='images')
-    def upload_image(self, request, pk=None):
+    def upload_image(self, request: Request, pk: Optional[str] = None) -> Response:
+        """
+        Загрузить изображение для пространства
+
+        Args:
+            pk: ID пространства
+            request: Объект запроса
+
+        Returns:
+            Response: Данные загруженного изображения или ошибка
+        """
         space = self.get_object()
         if not request.user.is_authenticated or not hasattr(request.user, 'user_profile') or not request.user.user_profile.admin_status:
             return Response({'detail': 'Нет прав на редактирование'}, status=403)
@@ -518,7 +745,18 @@ class SpaceViewSet(ModelViewSet):
         return Response(ImageForSpacesSerializer(new_image).data)
     
     @action(detail=True, methods=['delete'], url_path='delete_image/(?P<image_id>[^/.]+)')
-    def delete_image(self, request, pk=None, image_id=None):
+    def delete_image(self, request: Request, pk: Optional[str] = None, image_id: Optional[str] = None) -> Response:
+        """
+        Удалить изображение пространства
+
+        Args:
+            pk: ID пространства
+            image_id: ID изображения
+            request: Объект запроса
+
+        Returns:
+            Response: Статус удаления или ошибка
+        """
         try:
             image = ImageForSpaces.objects.get(id=image_id, space_id=pk)
         except ImageForSpaces.DoesNotExist:
@@ -531,7 +769,18 @@ class SpaceViewSet(ModelViewSet):
         return Response({'detail': 'Изображение удалено'}, status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=True, methods=['patch'], url_path='set_cover/(?P<image_id>[^/.]+)')
-    def set_cover(self, request, pk=None, image_id=None):
+    def set_cover(self, request: Request, pk: Optional[str] = None, image_id: Optional[str] = None) -> Response:
+        """
+        Установить изображение обложкой пространства
+
+        Args:
+            pk: ID пространства
+            image_id: ID изображения
+            request: Объект запроса
+
+        Returns:
+            Response: Данные обложки или ошибка
+        """
         try:
             image = ImageForSpaces.objects.get(id=image_id, space_id=pk)
         except ImageForSpaces.DoesNotExist:
@@ -548,7 +797,17 @@ class SpaceViewSet(ModelViewSet):
         return Response(ImageForSpacesSerializer(image).data, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='book')
-    def book(self, request, pk=None):
+    def book(self, request: Request, pk: Optional[str] = None) -> Response:
+        """
+        Забронировать пространство
+
+        Args:
+            pk: ID пространства
+            request: Объект запроса с датами брони
+
+        Returns:
+            Response: Данные бронирования или ошибка
+        """
         space = self.get_object()
         user = request.user
 
@@ -595,17 +854,32 @@ class SpaceViewSet(ModelViewSet):
         return Response(BookingSerializer(new_book).data, status=201)
 
 class BookingViewSet(ModelViewSet):
+    """
+    ViewSet для управления бронированиями
+    """
     queryset = Booking.objects.select_related()
     serializer_class = BookingSerializer
     
     @action(detail=False, methods=['get'])
-    def stats(self, request):
+    def stats(self, request: Request) -> Response:
+        """
+        Получить статистику бронирований за последнюю неделю
+
+        Args:
+            request: Объект запроса
+
+        Returns:
+            Response: Статистика бронирований
+        """
         book_stats = Booking.objects.filter(
             book_date__range=(week_ago, now)
         ).aggregate(last_week_bookings=Count('id'))
         return Response(book_stats)
     
 class NewBookingViewSet(ModelViewSet):
+    """
+    ViewSet для управления новыми бронированиями
+    """
     permission_classes = [IsAdminUserCustom]
     queryset = Booking.objects.select_related().filter(
                 status="NB",
@@ -614,7 +888,17 @@ class NewBookingViewSet(ModelViewSet):
     serializer_class = BookingSerializer
     
     @action(detail=True, methods=['patch', 'get'], permission_classes=[IsAdminUserCustom])
-    def conf(self, request, pk=None):
+    def conf(self, request: Request, pk: Optional[str] = None) -> Response:
+        """
+        Подтвердить бронирование
+
+        Args:
+            pk: ID бронирования
+            request: Объект запроса
+
+        Returns:
+            Response: Обновленный список новых бронирований или ошибка
+        """
         try:
             book = Booking.objects.get(id=pk)
         except Booking.DoesNotExist:
@@ -634,7 +918,17 @@ class NewBookingViewSet(ModelViewSet):
         return Response(BookingSerializer(books, many=True).data, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['patch', 'get'], permission_classes=[IsAdminUserCustom])
-    def canc(self, request, pk=None):
+    def canc(self, request: Request, pk: Optional[str] = None) -> Response:
+        """
+        Отменить бронирование
+
+        Args:
+            pk: ID бронирования.
+            request: Объект запроса
+
+        Returns:
+            Response: Обновленный список новых бронирований или ошибка
+        """
         try:
             book = Booking.objects.get(id=pk)
         except Booking.DoesNotExist:
@@ -654,11 +948,23 @@ class NewBookingViewSet(ModelViewSet):
         return Response(BookingSerializer(books, many=True).data, status=status.HTTP_200_OK)
           
 class OrganizerViewSet(ModelViewSet):
+    """
+    ViewSet для управления организаторами
+    """
     queryset = Organizer.objects.select_related()
     serializer_class = OrganizerSerializer
     
     @action(detail=False, methods=['get'])
-    def search(self, request):
+    def search(self, request: Request) -> Response:
+        """
+        Поиск организаторов по части имени
+
+        Args:
+            request: запрос с параметром 'q' для поиска по имени
+
+        Returns:
+            Response с сериализованным списком найденных организаторов
+        """
         query = request.GET.get('q', '')
         if query:
             orgs = Organizer.objects.filter(name__contains=query)
@@ -667,17 +973,43 @@ class OrganizerViewSet(ModelViewSet):
         return Response(SpaceSerializer(orgs, many=True).data)
     
     @action(detail=False, methods=['get'])
-    def short(self, request):
+    def short(self, request: Request) -> Response:
+        """
+        Получение краткого списка организаторов
+
+        Args:
+            request: запрос
+
+        Returns:
+            Response с кратким списком организаторов
+        """
         orgs = Organizer.objects.values('id', 'name')
         return Response(orgs)
      
 class SpacesReviewViewSet(ModelViewSet):
+    """
+    ViewSet для управления отзывами помещений
+    """
     queryset = SpacesReview.objects.select_related()
     serializer_class = SpacesReviewSerializer
     
 class WidgetViewSet(ViewSet):
+    """
+    ViewSet для управления виджетами на главной странице
+    """
     @action(detail=False, methods=["get"])
-    def homepage(self, request):
+    def homepage(self, request: Request) -> Response:
+        """
+        Получение данных для главной страницы: топ популярных помещений,
+        ближайших мероприятий и организаторов
+
+        Args:
+            request: запрос
+
+        Returns:
+            Response с тремя списками: популярных помещений,
+            предстоящих событий и топ организаторов
+        """
         spaces = Space.objects.annotate(
             review_count=Count('space_reviews', filter=Q(space_reviews__is_visiable=True), distinct=True),
             fav_count=Count('favourite', distinct=True),
@@ -708,15 +1040,30 @@ class WidgetViewSet(ViewSet):
         })
         
 class BuildingViewSet(ModelViewSet):
+    """
+    ViewSet для управления зданиями
+    """
     queryset = Building.objects.all()
     serializer_class = BuildingSerializer
     
     @action(detail=False, methods=['get'])
-    def cities(self, request):
+    def cities(self, request: Request) -> Response:
+        """
+        Получение списка уникальных городов из зданий
+
+        Args:
+            request: запрос
+
+        Returns:
+            Response со списком уникальных городов
+        """
         cities = Building.objects.values_list('city').distinct()
         return Response(cities)
     
 class ItemsInSpacesViewSet(ModelViewSet):
+    """
+    ViewSet для управления особенностями помещений
+    """
     queryset = ItemInSpaces.objects.all()
     serializer_class = ItemInSpacesSerializer
     

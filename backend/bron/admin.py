@@ -1,4 +1,5 @@
 from django.contrib import admin, messages
+from django.http import HttpRequest
 from bron.models import *
 from django.contrib.auth.admin import UserAdmin
 from django.urls import reverse
@@ -14,24 +15,69 @@ class ProfileAdmin(admin.ModelAdmin):
     search_fields = ['user__username', 'user__first_name', 'user__last_name', 'patronymic']
     
     @admin.display(description='Имя пользователя')
-    def profile_link(self, obj):
+    def profile_link(self, obj: Profile) -> str:
+        """
+        Ссылка на страницу пользователя в админке
+
+        Args:
+            obj: Объект профиля пользователя
+
+        Returns:
+            HTML-ссылка на страницу пользователя
+        """
         url = reverse('admin:auth_user_change', args=[obj.user.id])
         return format_html('<a href="{}">{}</a>', url, str(obj.user.username))
     
     @admin.display(description='Имя')
-    def first_name(self, obj):
+    def first_name(self, obj: Profile) -> str:
+        """
+        Имя пользователя
+
+        Args:
+            obj: Объект профиля пользователя
+
+        Returns:
+            Имя пользователя
+        """
         return obj.user.first_name
     
     @admin.display(description='Фамилия')
-    def second_name(self, obj):
+    def second_name(self, obj: Profile) -> str:
+        """
+        Фамилия пользователя
+
+        Args:
+            obj: Объект профиля пользователя
+
+        Returns:
+            Фамилия пользователя
+        """
         return obj.user.last_name
     
     @admin.display(description='Почта')
-    def email(self, obj):
+    def email(self, obj: Profile) -> str:
+        """
+        Email пользователя
+
+        Args:
+            obj: Объект профиля пользователя
+
+        Returns:
+            Email пользователя
+        """
         return obj.user.email
     
     @admin.display(description='Telegram')
-    def link_tag(self, obj):
+    def link_tag(self, obj: Profile) -> str:
+        """
+        Ссылка на Telegram пользователя
+
+        Args:
+            obj: Объект профиля пользователя
+
+        Returns:
+            HTML-ссылка на Telegram или '-', если ссылки нет
+        """
         if (obj.telegram_link != None):
             return format_html('<a href="{}" target="_blank">{}</a>', obj.telegram_link, obj.telegram_link)
         return '-'
@@ -45,19 +91,55 @@ class CustomUserAdmin(UserAdmin):
     inlines = [ProfileInline]
     
     @admin.display(description='Отчество')
-    def patronymic(self, obj):
+    def patronymic(self, obj: User) -> str | None:
+        """
+        Отчество пользователя
+
+        Args:
+            obj: Объект пользователя
+
+        Returns:
+            Отчество из профиля пользователя
+        """
         return obj.user_profile.patronymic
     
     @admin.display(description='Телефон')
-    def telephone(self, obj):
+    def telephone(self, obj: User) -> str | None:
+        """
+        Телефон пользователя
+
+        Args:
+            obj: Объект пользователя
+
+        Returns:
+            Телефон из профиля пользователя
+        """
         return obj.user_profile.telephone
     
     @admin.display(boolean = True, description='Организатор')
-    def org_status(self, obj):
+    def org_status(self, obj: User) -> bool:
+        """
+        Статус организатора пользователя
+
+        Args:
+            obj: Объект пользователя
+
+        Returns:
+            True, если пользователь организатор, иначе False
+        """
         return obj.user_profile.org_status
     
     @admin.display(boolean = True, description='Администраторв')
-    def admin_status(self, obj):
+    def admin_status(self, obj: User) -> bool:
+        """
+        Статус администратора пользователя
+
+        Args:
+            obj: Объект пользователя
+
+        Returns:
+            True, если пользователь администратор, иначе False
+        """
         return obj.user_profile.admin_status
     
 class ImageForSpacesAdmin(admin.ModelAdmin):
@@ -67,7 +149,16 @@ class ImageForSpacesAdmin(admin.ModelAdmin):
     search_fields = ['space_id__name',]
     
     @admin.display(description='Превью')
-    def image_tag(self, obj):
+    def image_tag(self, obj: ImageForSpaces) -> str:
+        """
+        Отображение превью изображения
+
+        Args:
+            obj: Объект изображения для пространства
+
+        Returns:
+            HTML тег с превью изображения или сообщение об отсутствии изображения
+        """
         if obj.image:
             return mark_safe('<img src="%s" style="width: 45px; height:45px; object-fit:cover" />' % obj.image.url)
         else:
@@ -86,7 +177,16 @@ class SpaceAdmin(admin.ModelAdmin):
     search_fields = ['name', 'description', 'building_id__city', 'building_id__street', 'items_id__name', 'capacity']
     
     @admin.display(description='Особенности')
-    def get_items(self, obj):
+    def get_items(self, obj: Space) -> list[str]:
+        """
+        Получение списка особенностей пространства
+
+        Args:
+            obj: Объект пространства
+
+        Returns:
+            Список названий особенностей
+        """
         return [item.name for item in obj.items_id.all()]
 
 class BuildingAdmin(admin.ModelAdmin):
@@ -120,7 +220,16 @@ class ImgageForEventsAdmin(admin.ModelAdmin):
     search_fields = ['event_id__name']
     
     @admin.display(description='Превью')
-    def image_tag(self, obj):
+    def image_tag(self, obj: ImageForEvents) -> str:
+        """
+        Отображение превью изображения для события
+
+        Args:
+            obj: Объект изображения события
+
+        Returns:
+            HTML тег с превью изображения или сообщение об отсутствии изображения
+        """
         if obj.image:
             return mark_safe('<img src="%s" style="width: 45px; height:45px; object-fit:cover" />' % obj.image.url)
         else:
@@ -135,7 +244,15 @@ class EventWithItemsInline(admin.TabularInline):
     extra = 1
     
 @admin.action(description="Создать копию")
-def duplicate_event(modeladmin, request, queryset):
+def duplicate_event(modeladmin: admin.ModelAdmin, request: HttpRequest, queryset) -> None:
+    """
+    Создать копию выбранных событий, сдвинутых на неделю вперед, и сделать их неактивными
+
+    Args:
+        modeladmin: Админ-класс
+        request: запрос
+        queryset: QuerySet выбранных событий
+    """
     for event in queryset:
         event.pk = None 
         event.date += timedelta(weeks=1)
@@ -143,11 +260,27 @@ def duplicate_event(modeladmin, request, queryset):
         event.save()
 
 @admin.action(description="Сделать неактивными")
-def deactivate_events(modeladmin, request, queryset):
+def deactivate_events(modeladmin: admin.ModelAdmin, request: HttpRequest, queryset) -> None:
+    """
+    Сделать выбранные события неактивными
+
+    Args:
+        modeladmin: Админ-класс
+        request: запрос
+        queryset: QuerySet выбранных событий
+    """
     queryset.update(is_visiable=False)
     
 @admin.action(description="Перенести на день")
-def plus_day(modeladmin, request, queryset):
+def plus_day(modeladmin: admin.ModelAdmin, request: HttpRequest, queryset) -> None:
+    """
+    Перенести дату выбранных событий на один день вперед
+
+    Args:
+        modeladmin: Админ-класс
+        request: запрос
+        queryset: QuerySet выбранных событий
+    """
     for event in queryset:
         Event.objects.filter(id=event.id).update(date=event.date + timedelta(days=1))
 
@@ -161,16 +294,42 @@ class EventAdmin(admin.ModelAdmin):
     actions = [duplicate_event, deactivate_events, plus_day]
     
     @admin.display(description='Особенности')
-    def get_items(self, obj):
+    def get_items(self, obj: Event) -> list[str]:
+        """
+        Получение списка особенностей события
+
+        Args:
+            obj: Объект события
+
+        Returns:
+            Список названий особенностей
+        """
         return [item.name for item in obj.items_id.all()]
     
     @admin.display(description='PDF-сводка')
-    def pdf_link(self, obj):
+    def pdf_link(self, obj: Event) -> str:
+        """
+        Ссылка на PDF-сводку события
+
+        Args:
+            obj: Объект события
+
+        Returns:
+            HTML-ссылка на PDF-файл сводки
+        """
         url = reverse('event-pdf', args=[obj.pk])
         return format_html(f'<a href="{url}" target="_blank">PDF</a>')
     
 @admin.action(description="Проверить мероприятия")
-def check_org_events(modeladmin, request, queryset):
+def check_org_events(modeladmin: admin.ModelAdmin, request: HttpRequest, queryset) -> None:
+    """
+    Проверить наличие мероприятий у организаторов и вывести сообщения
+
+    Args:
+        modeladmin: Админ-класс
+        request: запрос
+        queryset: QuerySet выбранных организаторов
+    """
     for org in queryset:
         if org.org_events.exists():
             messages.warning(request, f"{org.name} — есть мероприятия")
@@ -188,7 +347,15 @@ class ItemInEventsAdmin(admin.ModelAdmin):
     list_display = ('name',)
 
 @admin.action(description="Удалить отмененные")
-def delete_canceled(modeladmin, request, queryset):
+def delete_canceled(modeladmin: admin.ModelAdmin, request: HttpRequest, queryset) -> None:
+    """
+    Удалить регистрации со статусом отменены
+
+    Args:
+        modeladmin: Админ-класс
+        request: запрос
+        queryset: QuerySet выбранных регистраций
+    """
     Registration.objects.filter(Q(status='CBC') | Q(status='CAC')).delete()
 
 class RegistrationAdmin(admin.ModelAdmin):
