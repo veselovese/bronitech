@@ -42,6 +42,25 @@ def save_user_profile(sender, instance, **kwargs) -> None:
     """
     instance.user_profile.save()
 
+from django.db import models
+from django.contrib.auth.models import User
+from django.utils import timezone
+
+class mvexam(models.Model):
+    exam_name = models.CharField(max_length=255, verbose_name="Название экзамена")
+    created_date = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    exam_date = models.DateTimeField(verbose_name="Дата проведения экзамена")
+    exam_image = models.ImageField(upload_to='exam_images/', verbose_name="Изображение задания", blank=True, null=True)
+    users = models.ManyToManyField(User, verbose_name="Пользователи", related_name="assigned_exams") 
+    is_public = models.BooleanField(default=False, verbose_name="Опубликовано")
+
+    class Meta:
+        verbose_name = "Экзамен"
+        verbose_name_plural = "Экзамены"
+    
+    def __str__(self):
+        return f"{self.exam_name} ({self.exam_date.strftime('%d.%m.%Y')})"
+
 # Информация о помещениях   
 class Building(models.Model):
     """
