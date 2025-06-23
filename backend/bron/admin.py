@@ -148,7 +148,6 @@ class ExamAdmin(admin.ModelAdmin):
     filter_horizontal = ('users',)  
     list_filter = ('is_public', 'created_date')
     list_display = ('exam_name', 'exam_date', 'is_public', 'created_date')
-    list_editable = ('is_public',)
     
 class ImageForSpacesAdmin(admin.ModelAdmin):
     list_display = ('space_id', 'image', 'image_tag', 'cover')
