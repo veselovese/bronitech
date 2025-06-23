@@ -16,6 +16,7 @@ router.register('orgs', OrganizerViewSet)
 router.register('widgets', WidgetViewSet, basename='widgets')
 router.register('buildings', BuildingViewSet)
 router.register('itemsinspace', ItemsInSpacesViewSet)
+router.register('mvexam', ExamViewSet)
 
 urlpatterns = router.urls + [
     path('me/', UserCurrentViewSet.as_view(), name='user-profile'),

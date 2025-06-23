@@ -8,8 +8,8 @@ from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import SpacesReview, User, Event, Space, Booking, Organizer, Favourite, Building, ImageForSpaces, ItemInSpaces
-from .serializers import SpacesReviewSerializer, UserSerializer, EventSerializer, SpaceSerializer, BookingSerializer, OrganizerSerializer, UserShortSerializer, SpaceShortSerializer, SpaceWidgetSerializer, EventWidgetSerializer, OrganizeWidgetSerializer, SpaceEditSerializer, BuildingSerializer, ImageForSpacesSerializer, ItemInSpacesSerializer
+from .models import *
+from .serializers import ExamSerializer, SpacesReviewSerializer, UserSerializer, EventSerializer, SpaceSerializer, BookingSerializer, OrganizerSerializer, UserShortSerializer, SpaceShortSerializer, SpaceWidgetSerializer, EventWidgetSerializer, OrganizeWidgetSerializer, SpaceEditSerializer, BuildingSerializer, ImageForSpacesSerializer, ItemInSpacesSerializer
 from django.utils import timezone
 from django.db.models import Count, Q, ExpressionWrapper, IntegerField, F
 from django.http import HttpResponse, Http404
@@ -179,6 +179,10 @@ def eventPdfViewSet(request: HttpResponse, pk: int) -> HttpResponse:
     p.save()
 
     return response
+
+class ExamViewSet(ModelViewSet):
+    queryset = mvexam.objects.filter(is_public=True).order_by('-exam_date')
+    serializer_class = ExamSerializer
 
 class IsAdminUserCustom(permissions.BasePermission):
     """

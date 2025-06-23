@@ -1,8 +1,13 @@
 from typing import Optional
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
-from .models import Building, ImageForEvents, ImageForSpaces, ItemInEvents, ItemInSpaces, Organizer, SpacesReview, User, Registration, Event, Booking, Space, Profile
+from .models import *
 
+class ExamSerializer(ModelSerializer):
+    class Meta:
+        model = mvexam
+        fields = ['id', 'exam_name', 'created_date', 'exam_date', 'users', 'is_public']    
+        
 class RegSerializer(ModelSerializer):
     class Meta:
         model = Registration
