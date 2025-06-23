@@ -142,6 +142,14 @@ class CustomUserAdmin(UserAdmin):
         """
         return obj.user_profile.admin_status
     
+class ExamAdmin(admin.ModelAdmin):
+    search_fields = ('exam_name', 'users__email')
+    date_hierarchy = 'exam_date'
+    filter_horizontal = ('users',)  
+    list_filter = ('is_public', 'created_date')
+    list_display = ('exam_name', 'exam_date', 'is_public', 'created_date')
+    list_editable = ('is_public',)
+    
 class ImageForSpacesAdmin(admin.ModelAdmin):
     list_display = ('space_id', 'image', 'image_tag', 'cover')
     list_filter = ('space_id', 'cover',)
@@ -389,3 +397,4 @@ admin.site.register(ItemInEvents, ItemInEventsAdmin)
 admin.site.register(ImageForEvents, ImgageForEventsAdmin)
 admin.site.register(Registration, RegistrationAdmin)
 admin.site.register(Favourite, FavouriteAdmin)
+admin.site.register(mvexam, ExamAdmin)
